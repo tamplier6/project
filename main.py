@@ -10,7 +10,7 @@ except ImportError as e:
     exit(1)
 
 
-def get_table_parts(table_type, length, width, height):
+def get_table_parts(table_type, length, width, height, quantity):
     """
     Рассчитывает детали для заданного типа стола на основе пользовательских параметров.
 
@@ -18,6 +18,7 @@ def get_table_parts(table_type, length, width, height):
     :param length: Длина крышки стола (см).
     :param width: Ширина крышки стола (см).
     :param height: Высота стола (см).
+    :param quantity: Количество столов.
     :return: Список деталей стола с их размерами и количеством.
     """
     if length <= 0 or width <= 0 or height <= 0:
@@ -42,10 +43,8 @@ def get_table_parts(table_type, length, width, height):
         # Подстольная полка (1 шт, длина и ширина уменьшены на 3 см)
         parts.append({"name": "Подстольная полка", "width": width - 3, "length": length - 3, "quantity": 1})
 
-        # Ножки (4 ножки, каждая из двух деталей)
-        # Здесь учитываем ножки как одну деталь, состоящую из двух частей.
-        parts.append({"name": "Ножка", "width": width / 10, "length": height, "quantity": 4})  # вертикальная часть
-        parts.append({"name": "Ножка", "width": width / 10, "length": length / 10, "quantity": 4})  # горизонтальная часть
+        # Ножки (8 одинаковых ножек для каждого стола, каждая с шириной width / 10 и длиной height)
+        parts.append({"name": "Ножка", "width": width / 10, "length": height, "quantity": 8 * quantity})  # Умножаем на количество столов
 
     else:
         raise ValueError("Неизвестный тип стола. Допустимые варианты: 'Письменный стол', 'Журнальный стол'.")
@@ -82,14 +81,22 @@ def submit():
             messagebox.showerror("Ошибка", "Введите корректное количество столов (от 1 до 100).")
             return
 
-        # Рассчитываем детали стола
-        parts = get_table_parts(table_type, length, width, height)
+        # Рассчитываем детали стола, передавая параметр quantity
+        parts = get_table_parts(table_type, length, width, height, quantity)
 
         # Преобразуем детали в список для оптимизации
         all_parts = []
         for part in parts:
-            for _ in range(part["quantity"] * quantity):
-                all_parts.append({"width": part["width"], "length": part["length"], "name": part["name"], "quantity": part["quantity"]})
+            if part["name"] == "Ножка":
+                # Умножаем количество ножек на количество столов, но количество ножек для каждого стола — 8
+                total_quantity = 8 * quantity  # 8 ножек на каждый стол, умножаем на количество столов
+            else:
+                total_quantity = part["quantity"] * quantity  # Для других деталей учитываем количество столов
+
+            # Добавляем детали в список all_parts
+            for _ in range(total_quantity):
+                all_parts.append({"width": part["width"], "length": part["length"], "name": part["name"], "quantity": 1})
+
 
         # Оптимизация раскроя
         cutting_plan = optimize_cutting(material_width, material_length, all_parts)
@@ -103,6 +110,7 @@ def submit():
 
     except ValueError as e:
         messagebox.showerror("Ошибка", str(e))
+
 
 def setup_ui():
     """Настройка интерфейса"""
