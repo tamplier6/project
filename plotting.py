@@ -1,7 +1,6 @@
 # plotting.py
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-
 def plot_cutting_plan(material_width, material_length, cutting_plan):
     fig, ax = plt.subplots()
     ax.set_xlim(0, material_width)
