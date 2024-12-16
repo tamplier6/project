@@ -2,14 +2,56 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 
-# Импортируем модули, предполагая их наличие
 try:
-    from db import get_parts_for_table, get_tables
     from cutting import optimize_cutting
     from plotting import plot_cutting_plan
 except ImportError as e:
     print(f"Ошибка импорта модуля: {e}")
     exit(1)
+
+
+def get_table_parts(table_type, length, width, height):
+    """
+    Рассчитывает детали для заданного типа стола на основе пользовательских параметров.
+
+    :param table_type: Тип стола ("Письменный стол" или "Журнальный стол").
+    :param length: Длина крышки стола (см).
+    :param width: Ширина крышки стола (см).
+    :param height: Высота стола (см).
+    :return: Список деталей стола с их размерами и количеством.
+    """
+    if length <= 0 or width <= 0 or height <= 0:
+        raise ValueError("Все размеры должны быть положительными числами.")
+
+    parts = []
+
+    if table_type == "Письменный стол":
+        # Крышка стола (1 шт)
+        parts.append({"name": "Крышка стола", "width": width, "length": length, "quantity": 1})
+
+        # Боковины (2 шт, высота = высота стола, ширина = ширина крышки)
+        parts.append({"name": "Боковина", "width": width, "length": height, "quantity": 2})
+
+        # Задняя стенка (1 шт, высота = высота стола, ширина = ширина крышки / 3)
+        parts.append({"name": "Задняя стенка", "width": width / 3, "length": height, "quantity": 1})
+
+    elif table_type == "Журнальный стол":
+        # Крышка стола (1 шт)
+        parts.append({"name": "Крышка стола", "width": width, "length": length, "quantity": 1})
+
+        # Подстольная полка (1 шт, длина и ширина уменьшены на 3 см)
+        parts.append({"name": "Подстольная полка", "width": width - 3, "length": length - 3, "quantity": 1})
+
+        # Ножки (4 ножки, каждая из двух деталей)
+        # Здесь учитываем ножки как одну деталь, состоящую из двух частей.
+        parts.append({"name": "Ножка", "width": width / 10, "length": height, "quantity": 4})  # вертикальная часть
+        parts.append({"name": "Ножка", "width": width / 10, "length": length / 10, "quantity": 4})  # горизонтальная часть
+
+    else:
+        raise ValueError("Неизвестный тип стола. Допустимые варианты: 'Письменный стол', 'Журнальный стол'.")
+
+    return parts
+
 
 def submit():
     try:
@@ -17,127 +59,101 @@ def submit():
         material_width = float(entry_material_width.get())
         material_length = float(entry_material_length.get())
 
-        # Проверяем, заполнены ли поля
         if material_width <= 0 or material_length <= 0:
             raise ValueError("Размеры материала должны быть больше нуля.")
 
-        # Собираем данные о деталях
-        parts = []
-        for detail, entry in part_entries.items():
-            try:
-                width = float(entry[0].get())
-                length = float(entry[1].get())
+        # Получаем тип стола
+        table_type = table_combobox.get()
 
-                if width <= 0 or length <= 0:
-                    raise ValueError("Размеры деталей должны быть больше нуля.")
+        # Получаем размеры стола
+        length = float(entry_table_length.get())
+        width = float(entry_table_width.get())
+        height = float(entry_table_height.get())
 
-                parts.append({'name': detail, 'width': width, 'length': length})
-            except ValueError:
-                messagebox.showerror("Ошибка", f"Некорректные размеры для детали: {detail}")
-                return
+        if length <= 0 or width <= 0 or height <= 0:
+            raise ValueError("Размеры стола должны быть больше нуля.")
+
+        # Получаем количество столов
+        try:
+            quantity = int(entry_table_quantity.get())
+            if quantity <= 0 or quantity > 100:
+                raise ValueError("Количество столов должно быть от 1 до 100.")
+        except ValueError:
+            messagebox.showerror("Ошибка", "Введите корректное количество столов (от 1 до 100).")
+            return
+
+        # Рассчитываем детали стола
+        parts = get_table_parts(table_type, length, width, height)
+
+        # Преобразуем детали в список для оптимизации
+        all_parts = []
+        for part in parts:
+            for _ in range(part["quantity"] * quantity):
+                all_parts.append({"width": part["width"], "length": part["length"], "name": part["name"], "quantity": part["quantity"]})
 
         # Оптимизация раскроя
-        cutting_plan = optimize_cutting(material_width, material_length, parts)
+        cutting_plan = optimize_cutting(material_width, material_length, all_parts)
 
-        # Проверяем результат оптимизации
         if not cutting_plan:
             messagebox.showerror("Ошибка", "Не удалось оптимизировать раскрой. Проверьте размеры деталей и материала.")
             return
 
-        # Построение плана раскроя
-        plot_cutting_plan(material_width, material_length, cutting_plan)
+        # Построение плана раскроя, передаем также список деталей
+        plot_cutting_plan(material_width, material_length, cutting_plan, parts)
 
-    except ValueError:
-        messagebox.showerror("Ошибка", "Пожалуйста, введите корректные размеры.")
-
-def on_table_selected(event):
-    """Обработчик выбора стола, чтобы создать поля ввода для деталей"""
-    try:
-        # Сначала удаляем старые поля
-        for widget in part_frame.winfo_children():
-            widget.destroy()
-
-        # Получаем выбранный стол
-        selected_table_name = table_combobox.get()
-        table = next((table for table in tables if table['name'] == selected_table_name), None)
-
-        if not table:
-            return
-
-        table_id = table['id']
-
-        # Получаем детали для выбранного стола из базы данных
-        parts = get_parts_for_table(table_id)
-
-        # Удаляем дублирующиеся записи деталей по имени
-        unique_parts = {part['name']: part for part in parts}.values()
-
-        # Создаем поля для ввода размеров деталей
-        global part_entries
-        part_entries = {}  # Сбрасываем старые записи
-
-        tk.Label(part_frame, text="Название детали").grid(row=0, column=0)
-        tk.Label(part_frame, text="Ширина").grid(row=0, column=1)
-        tk.Label(part_frame, text="Длина").grid(row=0, column=2)
-
-        for i, part in enumerate(unique_parts, start=1):
-            tk.Label(part_frame, text=part['name']).grid(row=i, column=0)
-
-            width_entry = tk.Entry(part_frame)
-            width_entry.grid(row=i, column=1)
-            width_entry.insert(0, part.get('width', 0))  # Заполняем значение по умолчанию
-
-            length_entry = tk.Entry(part_frame)
-            length_entry.grid(row=i, column=2)
-            length_entry.insert(0, part.get('length', 0))  # Заполняем значение по умолчанию
-
-            part_entries[part['name']] = (width_entry, length_entry)
-
-    except Exception as e:
-        messagebox.showerror("Ошибка", f"Не удалось загрузить детали: {e}")
+    except ValueError as e:
+        messagebox.showerror("Ошибка", str(e))
 
 def setup_ui():
     """Настройка интерфейса"""
-    try:
-        global tables
-        # Получаем все столы из базы данных
-        tables = get_tables()
+    root = tk.Tk()
+    root.title("Оптимизация раскроя стола")
 
-        # Основное окно
-        root = tk.Tk()
-        root.title("Оптимизация раскроя стола")
+    # Ввод размеров материала
+    tk.Label(root, text="Ширина материала (см)").grid(row=0, column=0)
+    global entry_material_width
+    entry_material_width = tk.Entry(root)
+    entry_material_width.grid(row=0, column=1)
 
-        # Ввод размеров материала
-        tk.Label(root, text="Ширина материала").grid(row=0, column=0)
-        global entry_material_width
-        entry_material_width = tk.Entry(root)
-        entry_material_width.grid(row=0, column=1)
+    tk.Label(root, text="Длина материала (см)").grid(row=1, column=0)
+    global entry_material_length
+    entry_material_length = tk.Entry(root)
+    entry_material_length.grid(row=1, column=1)
 
-        tk.Label(root, text="Длина материала").grid(row=1, column=0)
-        global entry_material_length
-        entry_material_length = tk.Entry(root)
-        entry_material_length.grid(row=1, column=1)
+    # Ввод типа стола
+    tk.Label(root, text="Тип стола").grid(row=2, column=0)
+    global table_combobox
+    table_combobox = ttk.Combobox(root, values=["Письменный стол", "Журнальный стол"])
+    table_combobox.grid(row=2, column=1)
 
-        # Ввод стола из выпадающего списка
-        tk.Label(root, text="Выберите стол").grid(row=2, column=0)
-        global table_combobox
-        table_combobox = ttk.Combobox(root, values=list({table['name'] for table in tables}))
-        table_combobox.grid(row=2, column=1)
-        table_combobox.bind("<<ComboboxSelected>>", on_table_selected)
+    # Ввод размеров стола
+    tk.Label(root, text="Длина стола (см)").grid(row=3, column=0)
+    global entry_table_length
+    entry_table_length = tk.Entry(root)
+    entry_table_length.grid(row=3, column=1)
 
-        # Создаем контейнер для полей ввода деталей
-        global part_frame
-        part_frame = tk.Frame(root)
-        part_frame.grid(row=3, column=0, columnspan=3)
+    tk.Label(root, text="Ширина стола (см)").grid(row=4, column=0)
+    global entry_table_width
+    entry_table_width = tk.Entry(root)
+    entry_table_width.grid(row=4, column=1)
 
-        # Кнопка расчета раскроя
-        submit_button = tk.Button(root, text="Рассчитать раскрой", command=submit)
-        submit_button.grid(row=4, column=0, columnspan=3)
+    tk.Label(root, text="Высота стола (см)").grid(row=5, column=0)
+    global entry_table_height
+    entry_table_height = tk.Entry(root)
+    entry_table_height.grid(row=5, column=1)
 
-        root.mainloop()
+    # Ввод количества столов
+    tk.Label(root, text="Количество столов (до 100)").grid(row=6, column=0)
+    global entry_table_quantity
+    entry_table_quantity = tk.Entry(root)
+    entry_table_quantity.grid(row=6, column=1)
 
-    except Exception as e:
-        messagebox.showerror("Ошибка", f"Не удалось настроить интерфейс: {e}")
+    # Кнопка расчета раскроя
+    submit_button = tk.Button(root, text="Рассчитать раскрой", command=submit)
+    submit_button.grid(row=7, column=0, columnspan=2)
+
+    root.mainloop()
 
 # Запуск программы
-setup_ui()
+if __name__ == "__main__":
+    setup_ui()
