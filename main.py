@@ -14,7 +14,7 @@ def get_table_parts(table_type, length, width, height, quantity):
     """
     Рассчитывает детали для заданного типа стола на основе пользовательских параметров.
 
-    :param table_type: Тип стола ("Письменный стол" или "Журнальный стол").
+    :param table_type: Тип стола ("Письменный стол", "Журнальный стол" или "Стол с тремя полками").
     :param length: Длина крышки стола (см).
     :param width: Ширина крышки стола (см).
     :param height: Высота стола (см).
@@ -30,11 +30,11 @@ def get_table_parts(table_type, length, width, height, quantity):
         # Крышка стола (1 шт)
         parts.append({"name": "Крышка стола", "width": width, "length": length, "quantity": 1})
 
-        # Боковины (2 шт, высота = высота стола, ширина = ширина крышки)
-        parts.append({"name": "Боковина", "width": width, "length": height, "quantity": 2})
+        # Боковины (2 шт)
+        parts.append({"name": "Боковина", "width": width * 0.8, "length": height, "quantity": 2})
 
         # Задняя стенка (1 шт, высота = высота стола, ширина = ширина крышки / 3)
-        parts.append({"name": "Задняя стенка", "width": width / 3, "length": height, "quantity": 1})
+        parts.append({"name": "Задняя стенка", "width": width / 3, "length": length * 0.9, "quantity": 1})
 
     elif table_type == "Журнальный стол":
         # Крышка стола (1 шт)
@@ -43,11 +43,27 @@ def get_table_parts(table_type, length, width, height, quantity):
         # Подстольная полка (1 шт, длина и ширина уменьшены на 3 см)
         parts.append({"name": "Подстольная полка", "width": width - 3, "length": length - 3, "quantity": 1})
 
-        # Ножки (8 одинаковых ножек для каждого стола, каждая с шириной width / 10 и длиной height)
-        parts.append({"name": "Ножка", "width": width / 10, "length": height, "quantity": 8 * quantity})  # Умножаем на количество столов
+        # Ножки (8 одинаковых ножек для каждого стола, каждая с шириной width / 7 и длиной height)
+        parts.append({"name": "Ножка", "width": width / 7, "length": height, "quantity": 8})  # Умножаем на количество столов
+
+    elif table_type == "Стол с тремя полками":
+        # Крышка стола (1 шт)
+        parts.append({"name": "Крышка стола", "width": width, "length": length, "quantity": 1})
+
+        # Боковины (4 шт)
+        parts.append({"name": "Боковина", "width": width, "length": height, "quantity": 4})
+
+        # Задняя стенка (1 шт)
+        parts.append({"name": "Задняя стенка", "width": width / 3, "length": length * 0.65, "quantity": 1})
+
+        # Полки (4 шт)
+        parts.append({"name": "Доска для полок", "width": width, "length": width, "quantity": 4})
+
+        # Дверцы (3 шт)
+        parts.append({"name": "Доска для дверцы", "width": height * 0.25, "length": width - 3, "quantity": 3})
 
     else:
-        raise ValueError("Неизвестный тип стола. Допустимые варианты: 'Письменный стол', 'Журнальный стол'.")
+        raise ValueError("Неизвестный тип стола. Допустимые варианты: 'Письменный стол', 'Журнальный стол', 'Стол с тремя полками'.")
 
     return parts
 
@@ -62,7 +78,12 @@ def submit():
             raise ValueError("Размеры материала должны быть больше нуля.")
 
         # Получаем тип стола
-        table_type = table_combobox.get()
+        table_type = table_combobox.get().strip()  # Убираем лишние пробелы
+
+        # Проверяем правильность типа стола
+        if table_type not in ["Письменный стол", "Журнальный стол", "Стол с тремя полками"]:
+            messagebox.showerror("Ошибка", "Неизвестный тип стола. Допустимые варианты: 'Письменный стол', 'Журнальный стол', 'Стол с тремя полками'.")
+            return
 
         # Получаем размеры стола
         length = float(entry_table_length.get())
@@ -97,7 +118,6 @@ def submit():
             for _ in range(total_quantity):
                 all_parts.append({"width": part["width"], "length": part["length"], "name": part["name"], "quantity": 1})
 
-
         # Оптимизация раскроя
         cutting_plan = optimize_cutting(material_width, material_length, all_parts)
 
@@ -131,7 +151,7 @@ def setup_ui():
     # Ввод типа стола
     tk.Label(root, text="Тип стола").grid(row=2, column=0)
     global table_combobox
-    table_combobox = ttk.Combobox(root, values=["Письменный стол", "Журнальный стол"])
+    table_combobox = ttk.Combobox(root, values=["Письменный стол", "Журнальный стол", "Стол с тремя полками"])
     table_combobox.grid(row=2, column=1)
 
     # Ввод размеров стола
@@ -161,6 +181,7 @@ def setup_ui():
     submit_button.grid(row=7, column=0, columnspan=2)
 
     root.mainloop()
+
 
 # Запуск программы
 if __name__ == "__main__":
