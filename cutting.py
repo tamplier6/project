@@ -1,26 +1,28 @@
-def drop_down(x, y, w, h, cutting_plan, free_spaces):
-    """Опускает деталь вниз в свободное место, если оно есть."""
-    min_y = y  # Начинаем с исходного Y
+def drop_down(x, y, w, h, cutting_plan, material_length):
+    """Опускает деталь вниз до упора, чтобы устранить щели снизу."""
+    min_y = y  # Текущая минимальная возможная координата Y
 
-    # Ищем, где деталь может опуститься вниз в каждой свободной области
-    for space in free_spaces:
-        sx, sy, sw, sl = space
+    while True:
+        next_y = min_y
+        for part in cutting_plan:
+            px, py, pw, ph = part['x'], part['y'], part['width'], part['length']
 
-        # Проверяем, что деталь помещается в эту свободную область и может опуститься вниз
-        if sx < x + w and x < sx + sw and sy <= y and sl >= h:
-            # Проверяем, если пространство под деталью
-            if sy + sl <= min_y:
-                min_y = sy + sl  # Опускаем деталь в это место
+            # Проверяем пересечение по X и снизу по Y
+            if x < px + pw and x + w > px and min_y < py + ph <= min_y + h:
+                next_y = max(next_y, py + ph)
 
-    # Проверка на наложение с другими деталями
-    for placed_part in cutting_plan:
-        px, py, pw, ph = placed_part['x'], placed_part['y'], placed_part['width'], placed_part['length']
+        # Убедимся, что деталь не выходит за границы материала
+        if next_y + h > material_length:
+            break
 
-        if x < px + pw and x + w > px and min_y < py + ph and min_y + h > py:
-            # Если есть пересечение, возвращаем исходное значение Y
-            return y
+        # Если координата Y не изменилась, значит опускание завершено
+        if next_y == min_y:
+            break
 
-    return min_y  # Возвращаем минимальное значение Y
+        min_y = next_y
+
+    return min_y
+
 
 def optimize_cutting(material_width, material_length, parts):
     if material_width <= 0 or material_length <= 0:
@@ -66,8 +68,8 @@ def optimize_cutting(material_width, material_length, parts):
         space, part_width, part_length, rotated = best_fit
         sx, sy, sw, sl = space
 
-        # Опускаем деталь вниз, если это возможно
-        sy = drop_down(sx, sy, part_width, part_length, cutting_plan, free_spaces)
+        # Опускаем деталь вниз до упора
+        sy = drop_down(sx, sy, part_width, part_length, cutting_plan, material_length)
 
         cutting_plan.append({
             "x": sx,
