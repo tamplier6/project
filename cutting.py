@@ -1,5 +1,28 @@
+def drop_down(x, y, w, h, cutting_plan, free_spaces):
+    """Опускает деталь вниз в свободное место, если оно есть."""
+    min_y = y  # Начинаем с исходного Y
+
+    # Ищем, где деталь может опуститься вниз в каждой свободной области
+    for space in free_spaces:
+        sx, sy, sw, sl = space
+
+        # Проверяем, что деталь помещается в эту свободную область и может опуститься вниз
+        if sx < x + w and x < sx + sw and sy <= y and sl >= h:
+            # Проверяем, если пространство под деталью
+            if sy + sl <= min_y:
+                min_y = sy + sl  # Опускаем деталь в это место
+
+    # Проверка на наложение с другими деталями
+    for placed_part in cutting_plan:
+        px, py, pw, ph = placed_part['x'], placed_part['y'], placed_part['width'], placed_part['length']
+
+        if x < px + pw and x + w > px and min_y < py + ph and min_y + h > py:
+            # Если есть пересечение, возвращаем исходное значение Y
+            return y
+
+    return min_y  # Возвращаем минимальное значение Y
+
 def optimize_cutting(material_width, material_length, parts):
-    # Проверка на валидность размеров материала
     if material_width <= 0 or material_length <= 0:
         raise ValueError("Размеры материала должны быть положительными числами.")
     if not parts:
@@ -13,73 +36,74 @@ def optimize_cutting(material_width, material_length, parts):
     parts.sort(key=lambda x: x['width'] * x['length'], reverse=True)
 
     cutting_plan = []  # План раскроя
-    free_spaces = [(0, 0, material_width, material_length)]  # Начально всё полотно свободно
+    free_spaces = [(0, 0, material_width, material_length)]  # Все полотно свободно
 
-    # Функция для размещения детали в наилучшее свободное место
     def find_best_fit(part):
         best_fit = None
-        best_area = float('inf')
+        best_waste = float('inf')
 
         for space in free_spaces:
-            sx, sy, sw, sl = space  # Координаты свободной области
+            sx, sy, sw, sl = space
 
-            # Проверяем, помещается ли деталь
-            if part['width'] <= sw and part['length'] <= sl:
-                area = sw * sl  # Площадь текущей свободной области
+            for rotate in [False, True]:
+                part_width, part_length = (part['length'], part['width']) if rotate else (part['width'], part['length'])
 
-                # Выбираем наиболее подходящее место (минимальная площадь)
-                if area < best_area:
-                    best_fit = space
-                    best_area = area
+                if part_width <= sw and part_length <= sl:
+                    waste = (sw - part_width) * sl + sw * (sl - part_length)
+
+                    if waste < best_waste:
+                        best_fit = (space, part_width, part_length, rotate)
+                        best_waste = waste
 
         return best_fit
 
-    # Основной цикл: размещение деталей
     for part in parts:
-        # Проверяем, если у детали нет ключа 'name', пропускаем её
-        if "name" not in part:
-            raise ValueError(f"Деталь {part} не содержит обязательного ключа 'name'.")
+        best_fit = find_best_fit(part)
 
-        # Проверяем, если деталь - ножка и её количество больше 1, она должна оставаться цельной
-        if part["name"] == "Ножка" and part["quantity"] > 1:
-            # Убедимся, что ножки не разрезаются
-            part_copy = part.copy()
-            part_copy["quantity"] = 1  # Обрабатываем ножку как одну деталь
-            # Стараемся разместить все ножки вместе
-            for _ in range(part["quantity"]):
-                best_space = find_best_fit(part_copy)
+        if not best_fit:
+            raise ValueError(f"Не хватает места для размещения детали: {part}")
 
-                if not best_space:
-                    raise ValueError(f"Не хватает места для размещения ножек.")
+        space, part_width, part_length, rotated = best_fit
+        sx, sy, sw, sl = space
 
-                # Размещаем ножку в найденной области
-                sx, sy, sw, sl = best_space
-                cutting_plan.append((sx, sy, part_copy['width'], part_copy['length']))
+        # Опускаем деталь вниз, если это возможно
+        sy = drop_down(sx, sy, part_width, part_length, cutting_plan, free_spaces)
 
-                # Обновляем список свободных областей
-                free_spaces.remove(best_space)
-                free_spaces.append((sx + part_copy['width'], sy, sw - part_copy['width'], part_copy['length']))  # Оставшаяся часть по ширине
-                free_spaces.append((sx, sy + part_copy['length'], sw, sl - part_copy['length']))  # Оставшаяся часть по высоте
+        cutting_plan.append({
+            "x": sx,
+            "y": sy,
+            "width": part_width,
+            "length": part_length,
+            "name": part["name"],
+            "rotated": rotated
+        })
 
-                # Удаляем области с нулевой или отрицательной площадью
-                free_spaces = [space for space in free_spaces if space[2] > 0 and space[3] > 0]
+        # Обновляем свободные области
+        free_spaces.remove(space)
+        free_spaces.append((sx + part_width, sy, sw - part_width, part_length))  # Справа
+        free_spaces.append((sx, sy + part_length, sw, sl - part_length))  # Снизу
 
-        else:
-            best_space = find_best_fit(part)
-
-            if not best_space:
-                raise ValueError("Не хватает места для размещения всех деталей.")
-
-            # Размещаем деталь в найденной области
-            sx, sy, sw, sl = best_space
-            cutting_plan.append((sx, sy, part['width'], part['length']))
-
-            # Обновляем список свободных областей
-            free_spaces.remove(best_space)
-            free_spaces.append((sx + part['width'], sy, sw - part['width'], part['length']))  # Оставшаяся часть по ширине
-            free_spaces.append((sx, sy + part['length'], sw, sl - part['length']))  # Оставшаяся часть по высоте
-
-            # Удаляем области с нулевой или отрицательной площадью
-            free_spaces = [space for space in free_spaces if space[2] > 0 and space[3] > 0]
+        # Объединяем смежные свободные области
+        free_spaces = merge_adjacent_spaces(free_spaces)
 
     return cutting_plan
+
+
+def merge_adjacent_spaces(free_spaces):
+    merged = []
+    for space in free_spaces:
+        sx, sy, sw, sl = space
+        can_merge = False
+        for other in merged:
+            ox, oy, ow, ol = other
+            if sx == ox and sw == ow and sy + sl == oy:  # Вертикально смежные
+                other[1] = sy
+                other[3] += sl
+                can_merge = True
+            elif sy == oy and sl == ol and sx + sw == ox:  # Горизонтально смежные
+                other[0] = sx
+                other[2] += sw
+                can_merge = True
+        if not can_merge:
+            merged.append([sx, sy, sw, sl])
+    return merged

@@ -57,7 +57,7 @@ def get_table_parts(table_type, length, width, height, quantity):
         parts.append({"name": "Задняя стенка", "width": width / 3, "length": length * 0.65, "quantity": 1})
 
         # Полки (4 шт)
-        parts.append({"name": "Доска для полок", "width": width, "length": width, "quantity": 4})
+        parts.append({"name": "Доска для полок", "width": width - 1.5, "length": width - 3, "quantity": 4})
 
         # Дверцы (3 шт)
         parts.append({"name": "Доска для дверцы", "width": height * 0.25, "length": width - 3, "quantity": 3})
@@ -108,28 +108,27 @@ def submit():
         # Преобразуем детали в список для оптимизации
         all_parts = []
         for part in parts:
-            if part["name"] == "Ножка":
-                # Умножаем количество ножек на количество столов, но количество ножек для каждого стола — 8
-                total_quantity = 8 * quantity  # 8 ножек на каждый стол, умножаем на количество столов
-            else:
-                total_quantity = part["quantity"] * quantity  # Для других деталей учитываем количество столов
-
-            # Добавляем детали в список all_parts
+            total_quantity = part["quantity"] * quantity
             for _ in range(total_quantity):
-                all_parts.append({"width": part["width"], "length": part["length"], "name": part["name"], "quantity": 1})
+                all_parts.append({
+                    "width": part["width"],
+                    "length": part["length"],
+                    "name": part["name"],
+                    "quantity": 1
+                })
 
-        # Оптимизация раскроя
         cutting_plan = optimize_cutting(material_width, material_length, all_parts)
 
         if not cutting_plan:
             messagebox.showerror("Ошибка", "Не удалось оптимизировать раскрой. Проверьте размеры деталей и материала.")
             return
 
-        # Построение плана раскроя, передаем также список деталей
-        plot_cutting_plan(material_width, material_length, cutting_plan, parts)
+
+        plot_cutting_plan(material_width, material_length, cutting_plan)
 
     except ValueError as e:
         messagebox.showerror("Ошибка", str(e))
+
 
 
 def setup_ui():

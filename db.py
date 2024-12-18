@@ -1,61 +1,115 @@
 import sqlite3
+import json
 
-def create_db():
-    """Создание базы данных и таблиц"""
-    conn = sqlite3.connect('tables.db')
+def create_database():
+    """Создает базу данных и необходимые таблицы"""
+    conn = sqlite3.connect('furniture_database.db')
     cursor = conn.cursor()
 
-    # Создание таблиц
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS tables (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        description TEXT
-    );
-    """)
+    # Создание таблицы для шаблонов столов
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS table_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        parts TEXT NOT NULL
+    )
+    ''')
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS parts (
-        id INTEGER PRIMARY KEY,
-        table_id INTEGER,
-        name TEXT,
-        width FLOAT,
-        length FLOAT,
-        FOREIGN KEY(table_id) REFERENCES tables(id)
-    );
-    """)
+    # Создание таблицы для размеров материала
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS material_sizes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        material_width REAL NOT NULL,
+        material_length REAL NOT NULL
+    )
+    ''')
 
-    # Пример данных (если они еще не были добавлены)
-    cursor.execute("INSERT INTO tables (name, description) VALUES (?, ?)", ("Обычный прямой", "Прямой стол с боковыми панелями"))
-    cursor.execute("INSERT INTO tables (name, description) VALUES (?, ?)", ("Угловой", "Угловой стол с полками"))
-    cursor.execute("INSERT INTO tables (name, description) VALUES (?, ?)", ("Угловой с полками", "Угловой стол с полками"))
-    
-    cursor.execute("INSERT INTO parts (table_id, name, width, length) VALUES (?, ?, ?, ?)", (1, "столешница", 120, 60))
-    cursor.execute("INSERT INTO parts (table_id, name, width, length) VALUES (?, ?, ?, ?)", (1, "боковая панель", 60, 30))
-    cursor.execute("INSERT INTO parts (table_id, name, width, length) VALUES (?, ?, ?, ?)", (2, "угловая панель", 80, 80))
-    cursor.execute("INSERT INTO parts (table_id, name, width, length) VALUES (?, ?, ?, ?)", (3, "столешница", 100, 50))
-    cursor.execute("INSERT INTO parts (table_id, name, width, length) VALUES (?, ?, ?, ?)", (3, "полка", 50, 40))
-
-    # Сохранение и закрытие
     conn.commit()
     conn.close()
 
-def get_tables():
-    """Получение всех столов"""
-    conn = sqlite3.connect('tables.db')
+def add_table_templates():
+    """Добавляет шаблоны столов в базу данных"""
+    templates = [
+        {
+            "name": "Письменный стол",
+            "parts": [
+                {"name": "Крышка стола", "width": 60, "length": 120, "quantity": 1},
+                {"name": "Боковина", "width": 60, "length": 80, "quantity": 2},
+                {"name": "Задняя стенка", "width": 40, "length": 108, "quantity": 1}
+            ]
+        },
+        {
+            "name": "Журнальный стол",
+            "parts": [
+                {"name": "Крышка стола", "width": 60, "length": 120, "quantity": 1},
+                {"name": "Подстольная полка", "width": 57, "length": 117, "quantity": 1},
+                {"name": "Ножка", "width": 8, "length": 70, "quantity": 8}
+            ]
+        },
+        {
+            "name": "Стол с тремя полками",
+            "parts": [
+                {"name": "Крышка стола", "width": 60, "length": 120, "quantity": 1},
+                {"name": "Боковина", "width": 60, "length": 80, "quantity": 4},
+                {"name": "Задняя стенка", "width": 40, "length": 78, "quantity": 1},
+                {"name": "Доска для полок", "width": 60, "length": 60, "quantity": 4},
+                {"name": "Доска для дверцы", "width": 20, "length": 57, "quantity": 3}
+            ]
+        }
+    ]
+    
+    conn = sqlite3.connect('furniture_database.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM tables")
-    tables = cursor.fetchall()
-    conn.close()
-    return [{'id': table[0], 'name': table[1]} for table in tables]
 
-def get_parts_for_table(table_id):
-    """Получение всех деталей для выбранного стола"""
-    conn = sqlite3.connect('tables.db')
+    for template in templates:
+        cursor.execute('''
+        INSERT INTO table_templates (name, parts)
+        VALUES (?, ?)
+        ''', (template["name"], json.dumps(template["parts"])))
+
+    conn.commit()
+    conn.close()
+
+def get_table_template(table_type):
+    """Извлекает шаблон стола из базы данных по типу стола"""
+    conn = sqlite3.connect('furniture_database.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT name, width, length FROM parts WHERE table_id=?", (table_id,))
-    parts = cursor.fetchall()
-    conn.close()
-    return [{'name': part[0], 'width': part[1], 'length': part[2]} for part in parts]
 
-create_db()
+    cursor.execute('''
+    SELECT parts FROM table_templates WHERE name = ?
+    ''', (table_type,))
+
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        return json.loads(result[0])
+    else:
+        return None
+
+def add_material_size(width, length):
+    """Добавляет размеры материала в базу данных"""
+    conn = sqlite3.connect('furniture_database.db')
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    INSERT INTO material_sizes (material_width, material_length)
+    VALUES (?, ?)
+    ''', (width, length))
+
+    conn.commit()
+    conn.close()
+
+def get_material_size():
+    """Извлекает размеры материала из базы данных"""
+    conn = sqlite3.connect('furniture_database.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT material_width, material_length FROM material_sizes ORDER BY id DESC LIMIT 1')
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        return result
+    else:
+        return None
